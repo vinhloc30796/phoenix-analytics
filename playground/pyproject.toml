@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "phoenix-playground"
+version = "0.1.0"
+description = ""
+authors = ["Loc Nguyen <vinhloc30796@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+polars = "^0.20.2"
+httpx = "^0.26.0"
+
+[tool.poetry.group.dev.dependencies]
+ipykernel = "^6.28.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
