@@ -1,0 +1,30 @@
+[
+    {
+      "market": "4DoNfFBfF7UokCC2FQzriy7yHK6DY6NVdYpuekQ5pRgg",
+      "base_ticker": "SOL",
+      "quote_ticker": "USDC",
+      "base_pubkey": "So11111111111111111111111111111111111111112",
+      "quote_pubkey": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+    },
+    {
+      "market": "GBMoNx84HsFdVK63t8BZuDgyZhSBaeKWB4pHHpoeRM9z",
+      "base_ticker": "Bonk",
+      "quote_ticker": "USDC",
+      "base_pubkey": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",
+      "quote_pubkey": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+    },
+    {
+      "market": "FZRgpfpvicJ3p23DfmZuvUgcQZBHJsWScTf2N2jK8dy6",
+      "base_ticker": "mSOL",
+      "quote_ticker": "SOL",
+      "base_pubkey": "mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So",
+      "quote_pubkey": "So11111111111111111111111111111111111111112"
+    },
+    {
+      "market": "FicF181nDsEcasznMTPp9aLa5Rbpdtd11GtSEa1UUWzx",
+      "base_ticker": "Bonk",
+      "quote_ticker": "SOL",
+      "base_pubkey": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",
+      "quote_pubkey": "So11111111111111111111111111111111111111112"
+    }
+  ]
