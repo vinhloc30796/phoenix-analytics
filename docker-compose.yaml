@@ -2,6 +2,7 @@ version: '3.7'
 
 networks:
   iceberg_net:
+  redpanda_net:
 
 volumes:
   minio_data:
@@ -51,15 +52,32 @@ services:
       - "8080:8080"
     networks:
       iceberg_net:
+      redpanda_net:
     depends_on:
       - rest
       - minio
     volumes:
-      - ./etc/trino/catalog/iceberg.properties:/etc/trino/catalog/iceberg.properties
+      - ./trino/catalog/iceberg.properties:/etc/trino/catalog/iceberg.properties
     environment:
       AWS_ACCESS_KEY_ID: admin
       AWS_SECRET_ACCESS_KEY: password
       AWS_REGION: eu-west-1
+
+  trino_init:
+    build: ./initializer
+    image: trino-init
+    container_name: trino-init
+    networks:
+      iceberg_net:
+    depends_on:
+      trino:
+        condition: service_healthy
+    environment:
+      # AUTH
+      TRINO_HOST: trino
+      TRINO_USER: admin
+      TRINO_PASSWORD: password
+      TRINO_CATALOG: iceberg
 
   postgres:
     image: postgres:latest
@@ -100,3 +118,92 @@ services:
       CATALOG_JDBC_USER: admin
       CATALOG_JDBC_PASSWORD: password
 
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v23.3.1
+    container_name: redpanda
+    hostname: redpanda
+    command:
+      - redpanda start
+      - --overprovisioned
+      - --smp 1
+      - --memory 1G
+      - --reserve-memory 0M
+      - --node-id 0
+      - --check=false
+      - --kafka-addr 0.0.0.0:9092
+      - --advertise-kafka-addr redpanda:9092
+      - --pandaproxy-addr 0.0.0.0:8082
+      - --advertise-pandaproxy-addr redpanda:8082
+      - --set redpanda.enable_transactions=true
+      - --set redpanda.enable_idempotence=true
+      - --set redpanda.auto_create_topics_enabled=true
+    ports:
+      - "9092:9092"
+      - "8081:8081"
+      - "8082:8082"
+      - "9644:9644"
+    networks:
+      redpanda_net:
+
+  console:
+    image: docker.redpanda.com/redpandadata/console:v2.3.8
+    entrypoint: /bin/sh
+    command: -c "echo \"$$CONSOLE_CONFIG_FILE\" > /tmp/config.yml; /app/console"
+    environment:
+      CONFIG_FILEPATH: /tmp/config.yml
+      CONSOLE_CONFIG_FILE: |
+        kafka:
+          brokers: ["redpanda:9092"]
+          schemaRegistry:
+            enabled: true
+            urls: ["http://redpanda:8081"]
+          # https://docs.redpanda.com/docs/manage/console/protobuf/#local-filesystem
+          protobuf:
+            enabled: true
+            schemaRegistry:
+              enabled: true
+        redpanda:
+          adminApi:
+            enabled: true
+            urls: ["http://redpanda:9644"]
+        connect:
+          enabled: true
+          clusters:
+            - name: local-connect-cluster
+              url: http://connect:8083
+    ports:
+      - 8888:8080
+    networks:
+      redpanda_net:
+    depends_on:
+      - redpanda
+
+  connect:
+    image: docker.redpanda.com/redpandadata/connectors:v1.0.13
+    hostname: connect
+    container_name: connect
+    networks:
+      redpanda_net:
+    #platform: 'linux/amd64'
+    depends_on:
+      - redpanda
+    ports:
+      - "8083:8083"
+    environment:
+      CONNECT_CONFIGURATION: |
+        key.converter=org.apache.kafka.connect.converters.ByteArrayConverter
+        value.converter=org.apache.kafka.connect.converters.ByteArrayConverter
+        group.id=connectors-cluster
+        offset.storage.topic=_internal_connectors_offsets
+        config.storage.topic=_internal_connectors_configs
+        status.storage.topic=_internal_connectors_status
+        config.storage.replication.factor=-1
+        offset.storage.replication.factor=-1
+        status.storage.replication.factor=-1
+        offset.flush.interval.ms=1000
+        producer.linger.ms=50
+        producer.batch.size=131072
+      CONNECT_BOOTSTRAP_SERVERS: redpanda:9092
+      CONNECT_GC_LOG_ENABLED: "false"
+      CONNECT_HEAP_OPTS: -Xms512M -Xmx512M
+      CONNECT_LOG_LEVEL: info
