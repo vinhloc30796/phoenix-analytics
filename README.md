@@ -3,3 +3,4 @@
 ## References
 
 - [Apache Iceberg + Trino + iceberg-kafka-connector](https://hendoxc.substack.com/p/apache-iceberg-trino-iceberg-kafka) by [Hagen](https://substack.com/profile/173721939-hagen)
+- [Wuerike/kafka-iceberg-streaming](https://github.com/Wuerike/kafka-iceberg-streaming)

@@ -55,12 +55,28 @@ func main() {
 		}
 	}
 
-	// Create table
+	// Create schema
 	create_result, err := db.Exec("CREATE SCHEMA IF NOT EXISTS iceberg.phoenix")
 	if err != nil {
 		panic(err)
 	} else {
 		fmt.Println("Done creating schema iceberg.phoenix")
 		_ = create_result
+	}
+
+	// Create table
+	txn_result, err := db.Exec("CREATE TABLE IF NOT EXISTS iceberg.phoenix.transaction (id bigint, name varchar)")
+	if err != nil {
+		panic(err)
+	} else {
+		fmt.Println("Done creating table iceberg.phoenix.transaction")
+		_ = txn_result
+	}
+	evt_result, err := db.Exec("CREATE TABLE IF NOT EXISTS iceberg.phoenix.event (id bigint, name varchar)")
+	if err != nil {
+		panic(err)
+	} else {
+		fmt.Println("Done creating table iceberg.phoenix.event")
+		_ = evt_result
 	}
 }
