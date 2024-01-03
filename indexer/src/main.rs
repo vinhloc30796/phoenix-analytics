@@ -4,17 +4,87 @@ use log::{debug, error, info};
 use solana_client::{
     rpc_client::{GetConfirmedSignaturesForAddress2Config, RpcClient},
     rpc_config::RpcBlockConfig,
+    rpc_response::RpcConfirmedTransactionStatusWithSignature,
 };
 use solana_program::pubkey;
-use solana_sdk::signature;
+use solana_sdk::signature::Signature;
 use solana_transaction_status::{
-    EncodedTransaction, EncodedTransactionWithStatusMeta, TransactionDetails, UiTransactionEncoding,
+    option_serializer::OptionSerializer, EncodedConfirmedTransactionWithStatusMeta,
+    EncodedTransaction, EncodedTransactionWithStatusMeta, TransactionConfirmationStatus,
+    TransactionDetails, UiTransactionEncoding,
 };
 use std::{path::PathBuf, str::FromStr};
 
 enum Environment {
     Devnet,
     MainnetBeta,
+}
+
+#[derive(Debug)]
+enum ConfirmationStatus {
+    Confirmed,
+    Unconfirmed,
+    Finalized,
+}
+
+struct RawTransaction {
+    confirmed_txn: RpcConfirmedTransactionStatusWithSignature,
+    encoded_txn: EncodedTransactionWithStatusMeta,
+}
+
+#[derive(Debug)]
+struct Transaction {
+    signature: String,
+    timestamp: u64,
+    successful: bool,
+    confirmation_status: ConfirmationStatus,
+    slot: u64,
+    fee: u64,
+    compute_units: u64,
+}
+
+impl TryFrom<RawTransaction> for Transaction {
+    type Error = anyhow::Error;
+
+    fn try_from(raw_txn: RawTransaction) -> Result<Self> {
+        // Deconstruct the raw transaction
+        let confirmed_txn = raw_txn.confirmed_txn;
+        let encoded_txn = raw_txn.encoded_txn;
+
+        // Get the necessary fields from EncodedTransactionWithStatusMeta
+        let meta = encoded_txn.meta.unwrap();
+        let successful = meta.err.is_none();
+        let signature = match encoded_txn.transaction {
+            EncodedTransaction::Json(details) => details.signatures[0].to_string(),
+            _ => return Err(anyhow::anyhow!("Error: Transaction is not in JSON format")),
+        };
+        let fee = meta.fee;
+
+        // Get the necessary fields from RpcConfirmedTransactionStatusWithSignature
+        let timestamp = confirmed_txn.block_time.unwrap() as u64;
+        let confirmation_status = match confirmed_txn.confirmation_status {
+            Some(TransactionConfirmationStatus::Confirmed) => ConfirmationStatus::Confirmed,
+            Some(TransactionConfirmationStatus::Finalized) => ConfirmationStatus::Finalized,
+            Some(TransactionConfirmationStatus::Processed) => ConfirmationStatus::Confirmed,
+            None => ConfirmationStatus::Unconfirmed,
+        };
+        // let confirmations = meta.confirmations.unwrap();
+        let slot = confirmed_txn.slot.into();
+        let compute_units = match meta.compute_units_consumed {
+            OptionSerializer::Some(c) => c,
+            OptionSerializer::None => 0,
+            OptionSerializer::Skip => panic!("Error: Compute units consumed is None"),
+        };
+        Ok(Transaction {
+            signature,
+            timestamp,
+            successful,
+            confirmation_status,
+            slot,
+            fee,
+            compute_units,
+        })
+    }
 }
 
 fn get_env() -> Environment {
@@ -94,41 +164,37 @@ fn get_block_transactions(
 }
 
 #[allow(dead_code)]
-fn print_transactions(transactions: Vec<EncodedTransactionWithStatusMeta>) {
+fn print_transactions(transactions: Vec<EncodedConfirmedTransactionWithStatusMeta>) {
     transactions.into_iter().enumerate().for_each(|(i, tx)| {
-        let cur_tx = tx.to_owned();
-        let meta = cur_tx.meta.unwrap();
-        match cur_tx.transaction {
+        let inner_tx = tx.transaction.transaction;
+        match inner_tx {
             EncodedTransaction::Json(details) => {
-                info!("{} - Transaction ID: {:?}", i, details.signatures[0]);
+                let meta = tx.transaction.meta.unwrap();
+                info!("{} - Transaction ID: {:?}", i, details.signatures);
                 info!("- Meta.Fee: {:?}", meta.fee);
                 info!("- Meta.Compute: {:?}", meta.compute_units_consumed);
                 info!("- Signatures: {:?}\n", details.signatures);
             }
-            _ => {
-                let msg = format!("Error: Transaction {} is not in JSON format", i);
-                error!("{}", msg);
-                panic!("{}", msg);
-            }
+            _ => error!("Error: Transaction is not in JSON format"),
         }
-    });
+    })
 }
 
 fn get_transaction(
     client: &RpcClient,
     signature: &str,
-) -> Result<EncodedTransactionWithStatusMeta> {
+) -> Result<EncodedConfirmedTransactionWithStatusMeta> {
     // str to bytes to signature
-    let s = signature::Signature::from_str(signature)?;
-    let transaction = client.get_transaction(&s, UiTransactionEncoding::Json)?;
-    Ok(transaction.transaction)
+    let s = Signature::from_str(signature)?;
+    let encoded_txn = client.get_transaction(&s, UiTransactionEncoding::Json)?;
+    Ok(encoded_txn)
 }
 
 fn get_account_transactions(
     client: &RpcClient,
     pubkey: &str,
     limit: Option<usize>,
-) -> Result<Vec<EncodedTransactionWithStatusMeta>> {
+) -> Result<Vec<Transaction>> {
     let config = GetConfirmedSignaturesForAddress2Config {
         before: None,
         until: None,
@@ -143,11 +209,15 @@ fn get_account_transactions(
         .iter()
         .map(
             |signature| match get_transaction(&client, &signature.signature) {
-                Ok(tx) => Ok(tx),
+                Ok(tx) => Ok(Transaction::try_from(RawTransaction {
+                    confirmed_txn: signature.clone(),
+                    encoded_txn: tx.transaction,
+                })
+                .unwrap()),
                 Err(e) => Err(anyhow::anyhow!("Error: {:?}", e))?,
             },
         )
-        .collect::<Result<Vec<EncodedTransactionWithStatusMeta>>>()?;
+        .collect::<Result<Vec<Transaction>>>()?;
     Ok(outs)
 }
 
@@ -168,6 +238,6 @@ fn main() -> Result<()> {
         None => return Err(anyhow::anyhow!("Error: Failed to get market address")),
     };
     let transactions = get_account_transactions(&client, market_pubkey, Some(10)).unwrap();
-    print_transactions(transactions);
+    println!("{:?}", transactions);
     Ok(())
 }

@@ -70,11 +70,9 @@ func main() {
 		timestamp timestamp,
 		successful boolean,
 		confirmation_status varchar,
-		confirmations bigint,
 		slot bigint,
 		fee bigint,
-		compute_units bigint,
-		transaction_version varchar
+		compute_units bigint
 	)`
 	txn_result, err := db.Exec(txn_query)
 	if err != nil {
