@@ -64,15 +64,31 @@ func main() {
 		_ = create_result
 	}
 
-	// Create table
-	txn_result, err := db.Exec("CREATE TABLE IF NOT EXISTS iceberg.phoenix.transaction (id bigint, name varchar)")
+	// Create table: Transaction
+	txn_query := `CREATE TABLE IF NOT EXISTS iceberg.phoenix.transaction (
+		signature varchar,
+		timestamp timestamp,
+		successful boolean,
+		confirmation_status varchar,
+		confirmations bigint,
+		slot bigint,
+		fee bigint,
+		compute_units bigint,
+		transaction_version varchar
+	)`
+	txn_result, err := db.Exec(txn_query)
 	if err != nil {
 		panic(err)
 	} else {
 		fmt.Println("Done creating table iceberg.phoenix.transaction")
 		_ = txn_result
 	}
-	evt_result, err := db.Exec("CREATE TABLE IF NOT EXISTS iceberg.phoenix.event (id bigint, name varchar)")
+	// Create table: Event
+	evt_query := `CREATE TABLE IF NOT EXISTS iceberg.phoenix.event (
+		id bigint, 
+		name varchar
+	)`
+	evt_result, err := db.Exec(evt_query)
 	if err != nil {
 		panic(err)
 	} else {
