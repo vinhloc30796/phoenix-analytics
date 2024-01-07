@@ -10,6 +10,7 @@ volumes:
 services:
   minio:
     image: minio/minio
+    hostname: minio
     container_name: minio
     environment:
       MINIO_ROOT_USER: admin
@@ -99,6 +100,7 @@ services:
 
   rest:
     image: tabulario/iceberg-rest
+    hostname: rest
     container_name: iceberg-rest
     networks:
       iceberg_net:
@@ -246,15 +248,16 @@ services:
           "tasks.max": "1",
           "topics": "transaction",
           "connector.class": "io.tabular.iceberg.connect.IcebergSinkConnector",
+          "iceberg.catalog": "iceberg",
           "iceberg.catalog.s3.endpoint": "http://minio:9000",
-          "iceberg.catalog.s3.secret-access-key": "minioadmin",
-          "iceberg.catalog.s3.access-key-id": "minioadmin",
+          "iceberg.catalog.s3.access-key-id": "admin",
+          "iceberg.catalog.s3.secret-access-key": "password",
           "iceberg.catalog.uri": "http://rest:8181",
-          "iceberg.catalog.warehouse": "s3://warehouse/",
+          "iceberg.catalog.warehouse": "s3://demo-iceberg/",
           "iceberg.catalog.client.region": "eu-west-1",
           "iceberg.catalog.type": "rest",
           "iceberg.control.commitIntervalMs": "1000",
-          "iceberg.tables": "iceberg.phoenix.transaction",
+          "iceberg.tables": "phoenix.transaction",
           "value.converter.schemas.enable": "false",
           "value.converter": "org.apache.kafka.connect.json.JsonConverter",
           "key.converter": "org.apache.kafka.connect.storage.StringConverter",
@@ -269,15 +272,16 @@ services:
           "tasks.max": "1",
           "topics": "event",
           "connector.class": "io.tabular.iceberg.connect.IcebergSinkConnector",
+          "iceberg.catalog": "iceberg",
           "iceberg.catalog.s3.endpoint": "http://minio:9000",
-          "iceberg.catalog.s3.secret-access-key": "minioadmin",
-          "iceberg.catalog.s3.access-key-id": "minioadmin",
+          "iceberg.catalog.s3.access-key-id": "admin",
+          "iceberg.catalog.s3.secret-access-key": "password",
           "iceberg.catalog.uri": "http://rest:8181",
-          "iceberg.catalog.warehouse": "s3://warehouse/",
+          "iceberg.catalog.warehouse": "s3://demo-iceberg/",
           "iceberg.catalog.client.region": "eu-west-1",
           "iceberg.catalog.type": "rest",
           "iceberg.control.commitIntervalMs": "1000",
-          "iceberg.tables": "iceberg.phoenix.event",
+          "iceberg.tables": "phoenix.event",
           "value.converter.schemas.enable": "false",
           "value.converter": "org.apache.kafka.connect.json.JsonConverter",
           "key.converter": "org.apache.kafka.connect.storage.StringConverter",
