@@ -1,6 +1,7 @@
 use anyhow::Result;
 use indexer::pubsub::init_producer;
-use indexer::rpc::get_account_transactions;
+use indexer::rpc::{get_account_signatures, get_transaction};
+use indexer::txn::{RawTransaction, Transaction};
 use log::{debug, error, info};
 use solana_client::rpc_client::RpcClient;
 use solana_transaction_status::{EncodedConfirmedTransactionWithStatusMeta, EncodedTransaction};
@@ -82,7 +83,18 @@ fn main() -> Result<()> {
         Some(s) => s,
         None => return Err(anyhow::anyhow!("Error: Failed to get market address")),
     };
-    let transactions = get_account_transactions(&client, market_pubkey, Some(10)).unwrap();
+    let signatures = get_account_signatures(&client, market_pubkey, None).unwrap();
+    let transactions: Vec<Transaction> = signatures
+        .iter()
+        .map(|signature| {
+            let raw_transaction = get_transaction(&client, &signature.signature).unwrap();
+            Transaction::try_from(RawTransaction {
+                confirmed_txn: signature.clone(),
+                encoded_txn: raw_transaction.transaction,
+            })
+            .unwrap()
+        })
+        .collect();
     println!("{:?}", transactions);
 
     // Publish

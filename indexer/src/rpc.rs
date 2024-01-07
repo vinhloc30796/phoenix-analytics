@@ -1,9 +1,9 @@
-use crate::txn::{RawTransaction, Transaction};
 use anyhow::Result;
 use log::info;
 use solana_client::{
     rpc_client::{GetConfirmedSignaturesForAddress2Config, RpcClient},
     rpc_config::RpcBlockConfig,
+    rpc_response::RpcConfirmedTransactionStatusWithSignature,
 };
 use solana_program::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
@@ -61,11 +61,11 @@ pub fn get_transaction(
     Ok(encoded_txn)
 }
 
-pub fn get_account_transactions(
+pub fn get_account_signatures(
     client: &RpcClient,
     pubkey: &str,
     limit: Option<usize>,
-) -> Result<Vec<Transaction>> {
+) -> Result<Vec<RpcConfirmedTransactionStatusWithSignature>> {
     let config = GetConfirmedSignaturesForAddress2Config {
         before: None,
         until: None,
@@ -73,21 +73,8 @@ pub fn get_account_transactions(
         commitment: None,
     };
     let p = Pubkey::from_str(pubkey).unwrap();
-    let signatures = client
-        .get_signatures_for_address_with_config(&p, config)
-        .unwrap();
-    let outs = signatures
-        .iter()
-        .map(
-            |signature| match get_transaction(&client, &signature.signature) {
-                Ok(tx) => Ok(Transaction::try_from(RawTransaction {
-                    confirmed_txn: signature.clone(),
-                    encoded_txn: tx.transaction,
-                })
-                .unwrap()),
-                Err(e) => Err(anyhow::anyhow!("Error: {:?}", e))?,
-            },
-        )
-        .collect::<Result<Vec<Transaction>>>()?;
-    Ok(outs)
+    return match client.get_signatures_for_address_with_config(&p, config) {
+        Ok(signatures) => Ok(signatures),
+        Err(e) => Err(anyhow::anyhow!("Error: {:?}", e)),
+    };
 }
