@@ -4,7 +4,10 @@ use indexer::rpc::{get_account_signatures, get_transaction};
 use indexer::txn::{RawTransaction, Transaction};
 use log::{debug, error, info};
 use solana_client::rpc_client::RpcClient;
-use solana_transaction_status::{EncodedConfirmedTransactionWithStatusMeta, EncodedTransaction};
+use solana_transaction_status::{
+    option_serializer::OptionSerializer, EncodedConfirmedTransactionWithStatusMeta,
+    EncodedTransaction,
+};
 use std::path::PathBuf;
 
 enum Environment {
@@ -88,22 +91,40 @@ fn main() -> Result<()> {
     let raw_txns = signatures
         .iter()
         .map(|signature| {
-            let raw_transaction = get_transaction(&client, &signature.signature).unwrap();
-            return raw_transaction;
+            let raw_txn = get_transaction(&client, &signature.signature).unwrap();
+            return raw_txn;
         })
         .collect::<Vec<_>>();
     let transactions: Vec<Transaction> = signatures
         .iter()
         .zip(raw_txns.iter())
-        .map(|(signature, raw_transaction)| {
+        .map(|(signature, raw_txn)| {
             Transaction::try_from(RawTransaction {
                 confirmed_txn: signature.clone(),
-                encoded_txn: raw_transaction.transaction.clone(),
+                encoded_txn: raw_txn.transaction.clone(),
             })
             .unwrap()
         })
         .collect();
-    info!("{:?}", transactions);
+    // let meta = raw_txns[0].transaction.meta.clone().unwrap();
+    let instructions = raw_txns
+        .iter()
+        .map(|raw_txn| {
+            let meta = raw_txn.transaction.meta.clone().unwrap();
+            let instructions = match meta.inner_instructions {
+                OptionSerializer::Some(instructions) => instructions,
+                OptionSerializer::None => vec![],
+                OptionSerializer::Skip => panic!("Error: Instructions is None"),
+            };
+
+            info!("Found {} instructions", instructions.len());
+            instructions
+        })
+        .collect::<Vec<Vec<_>>>();
+    info!(
+        "Finished processing instructions for {} transactions",
+        instructions.len()
+    );
 
     // Publish
     let mut producer = init_producer();
