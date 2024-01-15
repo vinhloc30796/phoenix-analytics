@@ -1,5 +1,5 @@
 use anyhow::Result;
-use log::info;
+use log::{info, debug};
 use solana_client::{
     rpc_client::{GetConfirmedSignaturesForAddress2Config, RpcClient},
     rpc_config::RpcBlockConfig,
@@ -58,6 +58,7 @@ pub fn get_transaction(
     // str to bytes to signature
     let s = Signature::from_str(signature)?;
     let encoded_txn = client.get_transaction(&s, UiTransactionEncoding::Json)?;
+    debug!("Got transaction for signature: {}", signature);
     Ok(encoded_txn)
 }
 
@@ -74,7 +75,10 @@ pub fn get_account_signatures(
     };
     let p = Pubkey::from_str(pubkey).unwrap();
     return match client.get_signatures_for_address_with_config(&p, config) {
-        Ok(signatures) => Ok(signatures),
+        Ok(signatures) => {
+            debug!("{} signatures found", signatures.len());
+            Ok(signatures)
+        },
         Err(e) => Err(anyhow::anyhow!("Error: {:?}", e)),
     };
 }

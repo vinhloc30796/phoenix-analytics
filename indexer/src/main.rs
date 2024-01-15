@@ -79,23 +79,31 @@ fn main() -> Result<()> {
     );
 
     // let block_hash = client.get_latest_blockhash().unwrap();
+    // Extract data from the market
     let market_pubkey = match market["market"].as_str() {
         Some(s) => s,
         None => return Err(anyhow::anyhow!("Error: Failed to get market address")),
     };
-    let signatures = get_account_signatures(&client, market_pubkey, None).unwrap();
-    let transactions: Vec<Transaction> = signatures
+    let signatures = get_account_signatures(&client, market_pubkey, Some(10)).unwrap();
+    let raw_txns = signatures
         .iter()
         .map(|signature| {
             let raw_transaction = get_transaction(&client, &signature.signature).unwrap();
+            return raw_transaction;
+        })
+        .collect::<Vec<_>>();
+    let transactions: Vec<Transaction> = signatures
+        .iter()
+        .zip(raw_txns.iter())
+        .map(|(signature, raw_transaction)| {
             Transaction::try_from(RawTransaction {
                 confirmed_txn: signature.clone(),
-                encoded_txn: raw_transaction.transaction,
+                encoded_txn: raw_transaction.transaction.clone(),
             })
             .unwrap()
         })
         .collect();
-    println!("{:?}", transactions);
+    info!("{:?}", transactions);
 
     // Publish
     let mut producer = init_producer();
