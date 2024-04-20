@@ -1,12 +1,12 @@
 use anyhow::Result;
-use log::{info, debug};
+use log::{debug, info};
 use solana_client::{
     rpc_client::{GetConfirmedSignaturesForAddress2Config, RpcClient},
-    rpc_config::RpcBlockConfig,
+    rpc_config::{RpcBlockConfig, RpcTransactionConfig},
     rpc_response::RpcConfirmedTransactionStatusWithSignature,
 };
 use solana_program::pubkey::Pubkey;
-use solana_sdk::signature::Signature;
+use solana_sdk::{commitment_config::CommitmentConfig, signature::Signature};
 use solana_transaction_status::{
     EncodedConfirmedTransactionWithStatusMeta, EncodedTransactionWithStatusMeta,
     TransactionDetails, UiTransactionEncoding,
@@ -57,7 +57,13 @@ pub fn get_transaction(
 ) -> Result<EncodedConfirmedTransactionWithStatusMeta> {
     // str to bytes to signature
     let s = Signature::from_str(signature)?;
-    let encoded_txn = client.get_transaction(&s, UiTransactionEncoding::Json)?;
+    // let encoded_txn = client.get_transaction(&s, UiTransactionEncoding::Json)?;
+    let config = RpcTransactionConfig {
+        encoding: Some(UiTransactionEncoding::Json),
+        commitment: Some(CommitmentConfig::confirmed()),
+        max_supported_transaction_version: Some(0),
+    };
+    let encoded_txn = client.get_transaction_with_config(&s, config)?;
     debug!("Got transaction for signature: {}", signature);
     Ok(encoded_txn)
 }
