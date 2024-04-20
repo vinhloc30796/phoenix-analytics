@@ -1,4 +1,5 @@
 use anyhow::Result;
+use dotenv::dotenv;
 use indexer::pubsub::init_producer;
 use indexer::rpc::{get_account_signatures, get_transaction};
 use indexer::txn::{RawTransaction, Transaction};
@@ -29,8 +30,8 @@ fn get_env() -> Environment {
 fn get_rpc_addr() -> String {
     // Check if the RPC_URL environment variable is set
     let addr = match get_env() {
-        Environment::Devnet => "https://api.devnet.solana.com".to_string(),
-        Environment::MainnetBeta => "https://api.mainnet-beta.solana.com".to_string(),
+        Environment::Devnet => std::env::var("DEVNET_RPC").unwrap_or("https://api.devnet.solana.com".to_string()),
+        Environment::MainnetBeta => std::env::var("MAINNET_BETA_RPC").unwrap_or("https://api.mainnet-beta.solana.com".to_string()),
     };
     debug!("Using RPC URL: {}", addr);
     addr
@@ -71,6 +72,7 @@ fn print_transactions(transactions: Vec<EncodedConfirmedTransactionWithStatusMet
 }
 
 fn main() -> Result<()> {
+    dotenv().ok(); // Load the .env file
     env_logger::init(); // Initialize the logger
     let client = RpcClient::new(get_rpc_addr()); // Initialize the RPC client
 
