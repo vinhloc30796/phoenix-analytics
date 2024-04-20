@@ -1,5 +1,24 @@
 # phoenix-analytics
 
+## Commands
+
+### Load data
+
+```bash
+RUST_LOG=debug cargo run
+```
+
+### Query data
+
+```bash
+docker exec -it trino trino
+```
+
+```sql
+select * from iceberg.phoenix.transaction;
+select * from iceberg.phoenix.event;
+```
+
 ## References
 
 ### Business Logic a la Ellipsis Labs & Phoenix
