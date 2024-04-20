@@ -1,19 +1,15 @@
 use anyhow::Result;
-use log::{debug, error, info};
-use solana_client::{
-    rpc_client::{GetConfirmedSignaturesForAddress2Config, RpcClient},
-    rpc_config::RpcBlockConfig,
-};
-use solana_program::pubkey;
-use solana_sdk::signature::Signature;
-use solana_transaction_status::{
-    EncodedConfirmedTransactionWithStatusMeta, EncodedTransaction,
-    EncodedTransactionWithStatusMeta, TransactionDetails, UiTransactionEncoding,
-};
-use std::{path::PathBuf, str::FromStr};
-
+use dotenv::dotenv;
 use indexer::pubsub::init_producer;
+use indexer::rpc::{get_account_signatures, get_transaction};
 use indexer::txn::{RawTransaction, Transaction};
+use log::{debug, error, info};
+use solana_client::rpc_client::RpcClient;
+use solana_transaction_status::{
+    option_serializer::OptionSerializer, EncodedConfirmedTransactionWithStatusMeta,
+    EncodedTransaction,
+};
+use std::path::PathBuf;
 
 enum Environment {
     Devnet,
@@ -34,8 +30,8 @@ fn get_env() -> Environment {
 fn get_rpc_addr() -> String {
     // Check if the RPC_URL environment variable is set
     let addr = match get_env() {
-        Environment::Devnet => "https://api.devnet.solana.com".to_string(),
-        Environment::MainnetBeta => "https://api.mainnet-beta.solana.com".to_string(),
+        Environment::Devnet => std::env::var("DEVNET_RPC").unwrap_or("https://api.devnet.solana.com".to_string()),
+        Environment::MainnetBeta => std::env::var("MAINNET_BETA_RPC").unwrap_or("https://api.mainnet-beta.solana.com".to_string()),
     };
     debug!("Using RPC URL: {}", addr);
     addr
@@ -59,44 +55,6 @@ fn get_market() -> serde_json::Value {
 }
 
 #[allow(dead_code)]
-fn get_block_transactions(
-    client: &RpcClient,
-    slot: u64,
-    expected_blockhash: Option<String>,
-) -> Result<Vec<EncodedTransactionWithStatusMeta>> {
-    // let block_hash = "F5akWYT3joJYR6NCbM8sRBTyu4qN9Yi3X52LFDEjafbE";
-    // let slot = 266_666_666;
-    let config = RpcBlockConfig {
-        encoding: Some(UiTransactionEncoding::JsonParsed),
-        transaction_details: Some(TransactionDetails::Full),
-        rewards: None,
-        commitment: None,
-        max_supported_transaction_version: Some(0u8),
-    };
-
-    let block = client.get_block_with_config(slot, config).unwrap();
-    match expected_blockhash {
-        Some(expected_blockhash) => {
-            assert_eq!(
-                block.blockhash, expected_blockhash,
-                "Expected blockhash mismatch"
-            )
-        }
-        None => (),
-    }
-
-    // Loop through transactions & print out signatures
-    let transactions = block.transactions.unwrap();
-    let n_txn = transactions.len();
-    if n_txn == 0 {
-        info!("No transactions in block");
-        return Ok(transactions);
-    }
-    info!("{} transactions in block", n_txn);
-    return Ok(transactions);
-}
-
-#[allow(dead_code)]
 fn print_transactions(transactions: Vec<EncodedConfirmedTransactionWithStatusMeta>) {
     transactions.into_iter().enumerate().for_each(|(i, tx)| {
         let inner_tx = tx.transaction.transaction;
@@ -113,48 +71,8 @@ fn print_transactions(transactions: Vec<EncodedConfirmedTransactionWithStatusMet
     })
 }
 
-fn get_transaction(
-    client: &RpcClient,
-    signature: &str,
-) -> Result<EncodedConfirmedTransactionWithStatusMeta> {
-    // str to bytes to signature
-    let s = Signature::from_str(signature)?;
-    let encoded_txn = client.get_transaction(&s, UiTransactionEncoding::Json)?;
-    Ok(encoded_txn)
-}
-
-fn get_account_transactions(
-    client: &RpcClient,
-    pubkey: &str,
-    limit: Option<usize>,
-) -> Result<Vec<Transaction>> {
-    let config = GetConfirmedSignaturesForAddress2Config {
-        before: None,
-        until: None,
-        limit: limit,
-        commitment: None,
-    };
-    let p = pubkey::Pubkey::from_str(pubkey).unwrap();
-    let signatures = client
-        .get_signatures_for_address_with_config(&p, config)
-        .unwrap();
-    let outs = signatures
-        .iter()
-        .map(
-            |signature| match get_transaction(&client, &signature.signature) {
-                Ok(tx) => Ok(Transaction::try_from(RawTransaction {
-                    confirmed_txn: signature.clone(),
-                    encoded_txn: tx.transaction,
-                })
-                .unwrap()),
-                Err(e) => Err(anyhow::anyhow!("Error: {:?}", e))?,
-            },
-        )
-        .collect::<Result<Vec<Transaction>>>()?;
-    Ok(outs)
-}
-
 fn main() -> Result<()> {
+    dotenv().ok(); // Load the .env file
     env_logger::init(); // Initialize the logger
     let client = RpcClient::new(get_rpc_addr()); // Initialize the RPC client
 
@@ -166,12 +84,49 @@ fn main() -> Result<()> {
     );
 
     // let block_hash = client.get_latest_blockhash().unwrap();
+    // Extract data from the market
     let market_pubkey = match market["market"].as_str() {
         Some(s) => s,
         None => return Err(anyhow::anyhow!("Error: Failed to get market address")),
     };
-    let transactions = get_account_transactions(&client, market_pubkey, Some(10)).unwrap();
-    println!("{:?}", transactions);
+    let signatures = get_account_signatures(&client, market_pubkey, Some(10)).unwrap();
+    let raw_txns = signatures
+        .iter()
+        .map(|signature| {
+            let raw_txn = get_transaction(&client, &signature.signature).unwrap();
+            return raw_txn;
+        })
+        .collect::<Vec<_>>();
+    let transactions: Vec<Transaction> = signatures
+        .iter()
+        .zip(raw_txns.iter())
+        .map(|(signature, raw_txn)| {
+            Transaction::try_from(RawTransaction {
+                confirmed_txn: signature.clone(),
+                encoded_txn: raw_txn.transaction.clone(),
+            })
+            .unwrap()
+        })
+        .collect();
+    // let meta = raw_txns[0].transaction.meta.clone().unwrap();
+    let instructions = raw_txns
+        .iter()
+        .map(|raw_txn| {
+            let meta = raw_txn.transaction.meta.clone().unwrap();
+            let instructions = match meta.inner_instructions {
+                OptionSerializer::Some(instructions) => instructions,
+                OptionSerializer::None => vec![],
+                OptionSerializer::Skip => panic!("Error: Instructions is None"),
+            };
+
+            info!("Found {} instructions", instructions.len());
+            instructions
+        })
+        .collect::<Vec<Vec<_>>>();
+    info!(
+        "Finished processing instructions for {} transactions",
+        instructions.len()
+    );
 
     // Publish
     let mut producer = init_producer();

@@ -25,6 +25,7 @@ pub struct RawTransaction {
 #[derive(Debug, Serialize)]
 pub struct Transaction {
     signature: String,
+    // Send the timestamp in milliseconds (e.g. to Iceberg)
     timestamp: u64,
     successful: bool,
     confirmation_status: ConfirmationStatus,
@@ -51,7 +52,7 @@ impl TryFrom<RawTransaction> for Transaction {
         let fee = meta.fee;
 
         // Get the necessary fields from RpcConfirmedTransactionStatusWithSignature
-        let timestamp = confirmed_txn.block_time.unwrap() as u64;
+        let ms_timestamp = confirmed_txn.block_time.unwrap() as u64 * 1_000; // UNIX mseconds
         let confirmation_status = match confirmed_txn.confirmation_status {
             Some(TransactionConfirmationStatus::Confirmed) => ConfirmationStatus::Confirmed,
             Some(TransactionConfirmationStatus::Finalized) => ConfirmationStatus::Finalized,
@@ -67,7 +68,7 @@ impl TryFrom<RawTransaction> for Transaction {
         };
         Ok(Transaction {
             signature,
-            timestamp,
+            timestamp: ms_timestamp,
             successful,
             confirmation_status,
             slot,
