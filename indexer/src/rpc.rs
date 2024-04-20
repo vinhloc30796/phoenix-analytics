@@ -82,7 +82,7 @@ pub fn get_account_signatures(
     let p = Pubkey::from_str(pubkey).unwrap();
     return match client.get_signatures_for_address_with_config(&p, config) {
         Ok(signatures) => {
-            debug!("{} signatures found", signatures.len());
+            info!("{} signatures found", signatures.len());
             Ok(signatures)
         },
         Err(e) => Err(anyhow::anyhow!("Error: {:?}", e)),
